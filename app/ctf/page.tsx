@@ -22,9 +22,9 @@ export default function CTFPage() {
           {ctfs.map((ctf, index) => (
             <CTFCard
               key={`${ctf.event}-${index}`}
-              event={ctf.event}
-              date={ctf.date}
-              rank={ctf.rank}
+              event={ctf.event ?? ""}
+              date={ctf.date ?? ""}
+              rank={ctf.rank ?? ""}
               challenges={ctf.challenges}
               writeups={ctf.writeups}
               index={index}
