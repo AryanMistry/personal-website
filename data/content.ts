@@ -102,6 +102,13 @@ export const tools = [
 
 export const ctfs = [
   {
+    event: "ISSessions CTF",
+    date: "Feb 2026",
+    rank: "3rd / 40+ teams",
+    challenges: ["Pwn", "Forensics", "Misc", "Reverse Engineering", "Web"],
+    writeups: null,
+  },
+  {
     event: "PicoCTF",
     date: "Ongoing",
     rank: null,
