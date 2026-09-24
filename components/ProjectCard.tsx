@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { ExternalLink, Github } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, Github, FileText } from "lucide-react";
 
 interface ProjectCardProps {
   name: string;
@@ -10,6 +11,8 @@ interface ProjectCardProps {
   tech: string[];
   github: string | null;
   live: string | null;
+  /** Internal link to a long-form write-up, if one exists. */
+  writeup?: string | null;
   image?: string | null;
   index: number;
 }
@@ -20,6 +23,7 @@ export default function ProjectCard({
   tech,
   github,
   live,
+  writeup,
   image,
   index,
 }: ProjectCardProps) {
@@ -89,6 +93,15 @@ export default function ProjectCard({
               <ExternalLink size={16} />
               <span>Live</span>
             </motion.a>
+          )}
+          {writeup && (
+            <Link
+              href={writeup}
+              className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors duration-150 text-sm underline-animate relative"
+            >
+              <FileText size={16} />
+              <span>Write-up</span>
+            </Link>
           )}
         </div>
       </div>

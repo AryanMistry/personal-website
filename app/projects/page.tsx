@@ -27,6 +27,8 @@ export default function ProjectsPage() {
               tech={project.tech}
               github={project.github}
               live={project.live}
+              writeup={project.writeup}
+              image={project.image}
               index={index}
             />
           ))}

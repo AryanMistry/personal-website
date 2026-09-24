@@ -1,0 +1,146 @@
+---
+title: "How a ZK-STARK Actually Works"
+date: "2026-08-26"
+description: "A first-principles guide to zero-knowledge STARKs, built around a working proof system I wrote from scratch in Rust."
+slug: "zk-starks-from-scratch"
+---
+
+I built a STARK proof system from scratch in Rust with no cryptography libraries. The ideas underneath turned out to be far more intuitive than what the complicated terms suggests, so this is the explanation I wish I had when I started.
+
+Everything here is implemented in [zk-stark-vm](https://github.com/AryanMistry/zk-stark-vm).
+
+## The problem
+
+You ran a computation and now someone else wants to know you ran it *correctly*, without redoing the work themselves.
+
+That is the whole thing. Normally there are only two options: they re-run everything, which is expensive and requires all your data, or they trust you, which is not a plan. A STARK is a third option. You hand them a receipt they can check far faster than repeating the work.
+
+This has real world applications too. Ethereum cannot process many transactions, so rollups run thousands of them off-chain, post one proof, and every node checks that proof in milliseconds instead of re-executing everything. StarkNet, RISC Zero, and SP1 are all this machine at scale and what I built is a miniature of exactly that.
+
+## 1. The computation becomes a table
+
+My system runs programs on a tiny computer with six registers, two memory slots, eight instructions (`ADD SUB MUL JMP JMPIF LOAD STORE HALT`). The demo program computes Fibonacci, but with a real loop so the control flow actually depends on the data.
+
+To prove anything about a run, you first write down *every step*. One row per clock tick, each row recording the entire state of the machine.
+
+<TraceTable />
+
+For `n = 30` this takes about 250 steps, padded to 256 rows and 52 columns wide. The key property is that if the computation is correct, then every consecutive pair of rows follows the rules of the machine. Correctness, therefore, becomes local and mechanical.
+
+## 2. The rules become arithmetic
+
+Next, turn "follows the rules" into equations that equal zero. Instead of writing `if opcode == ADD then write_value = a + b`, you write:
+
+```
+is_add × (write_value − (val_a + val_b))
+```
+
+This is zero when the opcode is not ADD, because the first factor vanishes. It is also zero when the addition was done correctly, because the second factor vanishes. It is nonzero *only* if someone cheated on an ADD.
+
+There are 71 such expressions covering every opcode, register write, memory write and program counter update. So correct execution now means all 71 expressions are zero at every row. That is a check anyone could run, if they had the table. The rest of this writeup is about proving it *without* handing over the table.
+
+## 3. The table becomes a polynomial
+
+Here is the pivot that makes everything else possible. Take one column, say the program counter, which is 256 numbers. There is exactly one polynomial of degree below 256 passing through all of them, and you can find it efficiently with an inverse number-theoretic transform.
+
+Why bother? Because of a single fact:
+
+> Two different polynomials of degree below `d` can agree in at most `d` places.
+ 
+A list of numbers can be edited one entry at a time whereas a polynomial cannot. Change one value and you have not changed one value, you have changed *which polynomial it is*, and the new one disagrees with the old almost everywhere.
+
+## 4. Why a lie cannot hide
+
+Now evaluate that polynomial on a domain eight times larger than needed. 256 rows become 2,048 points. This is the low-degree extension, and it is where the security comes from.
+
+Click any dot to tamper with a single row:
+
+<LieAmplification />
+
+Notice what the counter says. The tampered polynomial agrees with the honest one at exactly the rows you did *not* touch, and disagrees everywhere else.  
+
+For a cheater to fake one table entry, they must produce a different polynomial, and that polynomial disagrees with any honest low-degree one across a huge fraction of the extended domain. So the verifier does not need to look everywhere. Instead, it spot-checks about two dozen random points and catches the lie with overwhelming probability.
+
+This is why verification can be so much cheaper than the computation. 
+
+## 5. Locking the prover in
+
+Random spot-checks only work if the prover cannot change its answers after learning which points get checked. The two following pieces fix that.
+
+**Merkle commitments.** The prover hashes all 2,048 values into a binary tree and publishes one 32-byte root which is now committed. To reveal a single value later it supplies the sibling hashes along the path, and the verifier re-hashes to confirm the root. Changing any value changes the root.
+
+**Fiat-Shamir.** Rather than an interactive back-and-forth, both sides *derive* the random challenges by hashing everything committed so far. Steering the challenge would mean finding a commitment whose hash lands where it wants, which is a hash preimage attack.
+
+## 6. The division trick
+
+We still have 71 constraints across 256 rows. To squash them, we multiply each by a random number drawn from the transcript and add them all together. If any single constraint is violated, the sum is almost certainly nonzero.
+
+Then divide by `Z(x) = x^N − 1`, the polynomial that is zero at exactly the trace rows:
+
+```
+constraints all hold  -> division is clean   -> result is a low-degree polynomial
+any constraint fails  -> a remainder is left -> result is not a polynomial at all
+```
+
+The question *"did this program run correctly?"* has become the question *"is this thing a low-degree polynomial?"*, and that second question has a fast answer.
+
+## 7. FRI
+
+So how do you prove something is low-degree without sending it? Sending all the coefficients would be as large as the computation itself which is a copy of the work, not a receipt.
+
+FRI instead folds the polynomial in half, over and over. Split it into even and odd halves, mix them using a random challenge, and you get a polynomial of half the degree. Repeat until a single constant remains, then check that it really is constant. If the original was not low-degree, the folding never bottoms out.
+
+<FriFolding />
+
+Each layer is committed before its random challenge is revealed, so a cheater cannot tailor values to a challenge it already knows. The verifier inspects only a handful of positions per layer, and there are only about ten layers.
+
+## Putting it together
+
+Each of those pieces only makes sense next to the others, so here is the whole protocol in one place, with the prover's work on one side and the verifier's on the other.
+
+<ProofPipeline />
+
+The thing worth noticing is what never crosses the gap. The verifier receives a Merkle root, a handful of out-of-domain evaluations, and roughly two dozen query openings. It never receives the trace, and it never reconstructs it.
+
+## The zero-knowledge part
+
+Everything so far buys **succinctness**, meaning cheap verification. It does not buy privacy. 
+
+A proof reveals roughly `2 + 2 × num_queries` evaluations of every trace polynomial. With 24 queries that is about 50 points. A 256-row trace needs 256 points to pin down, but an 8-row trace needs only 8. So for short traces, the entire execution was reconstructable from the proof alone.
+
+The fix is one line of algebra. Replace each trace polynomial with:
+
+```
+T'(x) = T(x) + r(x) · Z(x)        where Z(x) = x^N − 1 and r is random
+```
+
+`Z` is zero at every trace row, so `T'` agrees with `T` everywhere the constraints look and nothing breaks. But the extension lives on a coset, disjoint from the trace domain, which is exactly where `Z` is nonzero. Every value the proof reveals is now masked by fresh randomness. Prove the same trace twice and you get two different, equally valid proofs.
+
+> Blinding closes the direct trace openings. It does not rigorously account for leakage through the folded FRI layers, and there is no simulator proof.
+
+
+## The numbers
+
+Measured on the real implementation:
+
+<ScalingChart />
+
+The chart plots two quantities against the length of the execution trace, on a logarithmic vertical axis so that both fit in the same picture despite differing by more than two orders of magnitude. The upper line is the time taken to produce a proof, and the lower line is the time taken to check one.
+
+Moving from a 256-row trace to an 8,192-row trace makes the underlying computation thirty-two times larger. Proving time responds almost proportionally, rising by a factor of about thirty-nine, which is roughly what you would expect from an algorithm doing a quasilinear amount of work in the length of the trace. Verification rises by a factor of only 2.2 across that same range, because the verifier's cost depends on the logarithm of the trace length rather than on the trace length itself. It reads a fixed number of query openings no matter how long the computation was, and each of those costs a Merkle path whose depth grows by a single step every time the trace doubles.
+
+It is worth being straightforward about where this actually pays off, though. At 256 rows, generating the trace takes around 318 microseconds while verifying a proof of it takes about 839 microseconds, which means that at this size checking the proof is slower than simply running the program a second time. That is not a flaw in the implementation so much as a reflection of the fixed cost every proof carries regardless of the size of the computation behind it. By 8,192 rows the balance has already tipped the other way, with re-execution taking something close to ten milliseconds against a verification time still sitting at 1.6 milliseconds, and every further doubling of the trace widens that margin.
+
+The practical consequence is that a proof system of this kind is not a general-purpose speedup. It earns its overhead only when the computation being proven is large enough that re-running it would be genuinely expensive.
+
+## Build one yourself
+
+The full implementation is on GitHub: [zk-stark-vm](https://github.com/AryanMistry/zk-stark-vm). Finite field, NTT, Merkle tree, Fiat-Shamir transcript, FRI, AIR constraints, the VM, and the prover and verifier.
+```bash
+git clone https://github.com/AryanMistry/zk-stark-vm
+cd zk-stark-vm
+cargo run --release --example prove_fibonacci 30
+cargo run --release --example benchmark
+```
+
+Every layer is small enough to read in one sitting, and each one only depends on the layer below it.

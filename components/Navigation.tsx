@@ -1,17 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import SocialLinks from "./SocialLinks";
 
 const navLinks = [
-  { href: "#about", label: "about" },
-  { href: "#experience", label: "experience" },
-  { href: "#education", label: "education" },
-  { href: "#projects", label: "projects" },
-  { href: "#ctf", label: "ctf" },
+  { href: "/#about", label: "about" },
+  { href: "/#experience", label: "experience" },
+  { href: "/#education", label: "education" },
+  { href: "/#projects", label: "projects" },
+  { href: "/#ctf", label: "ctf" },
+  { href: "/posts", label: "posts" },
 ];
 
 export default function Navigation() {
@@ -25,9 +27,17 @@ export default function Navigation() {
       setActiveSection(window.location.hash || "#about");
     };
 
+    if (pathname === "/" && typeof window !== "undefined" && window.location.hash) {
+      const el = document.querySelector(window.location.hash);
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }
+
     const handleScroll = () => {
       if (isScrollingProgrammatically.current) return;
-      const sections = navLinks.map((link) => link.href.substring(1));
+      if (pathname !== "/") return;
+      const sections = navLinks
+        .filter((l) => l.href.startsWith("/#"))
+        .map((link) => link.href.replace("/#", ""));
       const scrollPosition = window.scrollY + 120;
       for (let i = sections.length - 1; i >= 0; i--) {
         const element = document.getElementById(sections[i]);
@@ -51,11 +61,15 @@ export default function Navigation() {
     };
   }, [pathname]);
 
-  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault();
+  const handleSectionClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     setMobileMenuOpen(false);
-    setActiveSection(href);
-    const element = document.querySelector(href);
+    if (pathname !== "/") {
+      return;
+    }
+    e.preventDefault();
+    const hash = href.startsWith("/#") ? href.slice(1) : href;
+    setActiveSection(hash);
+    const element = document.querySelector(hash);
     if (element) {
       isScrollingProgrammatically.current = true;
       element.scrollIntoView({ behavior: "smooth" });
@@ -77,18 +91,19 @@ export default function Navigation() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             {navLinks.map((link) => {
-              const isActive =
-                pathname === "/" &&
-                (activeSection === link.href || (!activeSection && link.href === "#about"));
-              return (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="relative hoverable group underline-animate pl-2"
-                  onClick={(e) => handleNavClick(e, link.href)}
-                >
+              const isHome = link.href === "/";
+              const isSection = link.href.startsWith("/#");
+              const sectionHash = isSection ? link.href.replace("/#", "#") : null;
+              const isActive = isHome
+                ? pathname === "/" && (!activeSection || activeSection === "#about")
+                : isSection
+                  ? pathname === "/" &&
+                    (activeSection === sectionHash || (!activeSection && link.href === "/#about"))
+                  : pathname === link.href || pathname.startsWith(link.href + "/");
+              const linkContent = (
+                <>
                   <span
-                    className={`text-sm transition-colors duration-150 ${
+                    className={`inline-block relative text-sm transition-colors duration-150 underline-animate ${
                       isActive ? "text-text-primary" : "text-text-secondary"
                     } group-hover:text-text-primary`}
                   >
@@ -100,7 +115,29 @@ export default function Navigation() {
                       aria-hidden
                     />
                   )}
-                </a>
+                </>
+              );
+              if (isHome || isSection) {
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="relative hoverable group pl-2"
+                    onClick={(e) => isSection && handleSectionClick(e as React.MouseEvent<HTMLAnchorElement>, link.href)}
+                  >
+                    {linkContent}
+                  </Link>
+                );
+              }
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="relative hoverable group pl-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {linkContent}
+                </Link>
               );
             })}
           </div>
@@ -142,22 +179,36 @@ export default function Navigation() {
             >
               <div className="p-4 space-y-1 max-h-[70vh] overflow-y-auto">
                 {navLinks.map((link) => {
-                  const isActive =
-                    pathname === "/" &&
-                    (activeSection === link.href || (!activeSection && link.href === "#about"));
+                  const isHome = link.href === "/";
+                  const isSection = link.href.startsWith("/#");
+                  const sectionHash = isSection ? link.href.replace("/#", "#") : null;
+                  const isActive = isHome
+                    ? pathname === "/" && (!activeSection || activeSection === "#about")
+                    : isSection
+                      ? pathname === "/" &&
+                        (activeSection === sectionHash || (!activeSection && link.href === "/#about"))
+                      : pathname === link.href || pathname.startsWith(link.href + "/");
+                  const className = `block py-3 px-4 rounded-lg text-base transition-colors duration-150 ${
+                    isActive
+                      ? "text-text-primary bg-background-elevated"
+                      : "text-text-secondary hover:text-text-primary hover:bg-background-elevated/50"
+                  }`;
                   return (
-                    <a
+                    <Link
                       key={link.href}
                       href={link.href}
-                      className={`block py-3 px-4 rounded-lg text-base transition-colors duration-150 ${
-                        isActive
-                          ? "text-text-primary bg-background-elevated"
-                          : "text-text-secondary hover:text-text-primary hover:bg-background-elevated/50"
-                      }`}
-                      onClick={(e) => handleNavClick(e, link.href)}
+                      className={className}
+                      onClick={(e) => {
+                        if (isSection && pathname === "/") {
+                          e.preventDefault();
+                          handleSectionClick(e as React.MouseEvent<HTMLAnchorElement>, link.href);
+                        } else {
+                          setMobileMenuOpen(false);
+                        }
+                      }}
                     >
                       {link.label}
-                    </a>
+                    </Link>
                   );
                 })}
                 <div className="pt-3 mt-3 border-t border-border">

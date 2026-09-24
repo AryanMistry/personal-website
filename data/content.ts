@@ -14,9 +14,9 @@ export const experience = [
   {
     company: "Microsoft",
     role: "Software Engineer",
-    period: "May 2026",
+    period: "May 2026 - Aug 2026",
     achievements: [
-      "Incoming S26 on the identity and network access team",
+      "Identity and Network Access",
     ],
   },
   {
@@ -47,12 +47,14 @@ export const experience = [
 
 export const projects = [
   {
-    name: "zk-Ferris",
-    description: "Implementing a zero-knowledge proof system from scratch in Rust",
-    tech: ["Rust", "Zk-SNARKs", "Zk-STARKs", "SPLONK"],
-    github: null,
+    name: "zk-ferris",
+    description:
+      "A STARK proof system built from scratch in Rust with no cryptography libraries.",
+    tech: ["Rust", "ZK-STARKs", "FRI", "NTT"],
+    github: "https://github.com/AryanMistry/zk-stark-vm",
     live: null,
-    image: null,
+    writeup: "/posts/zk-starks-from-scratch/",
+    image: "/projects/zk-ferris_pic.png",
   },
   {
     name: "Assemblyline",
@@ -60,6 +62,7 @@ export const projects = [
     tech: ["Python", "Docker", "FastAPI", "PostgreSQL"],
     github: "https://github.com/CybercentreCanada/assemblyline",
     live: null,
+    writeup: null,
     image: "/projects/assemblyline_pic.png",
   },
   {
@@ -68,6 +71,7 @@ export const projects = [
     tech: ["Python", "Arduino", "YoloV8", "OpenCV"],
     github: "https://github.com/AryanMistry/IntelliBin",
     live: null,
+    writeup: null,
     image: "/projects/intellibin_pic.png",
   },
   {
@@ -76,6 +80,7 @@ export const projects = [
     tech: ["Python", "React", "MongoDB", "NVD API", "OSV API"],
     github: "https://github.com/AryanMistry/sbom_analyzer",
     live: null,
+    writeup: null,
     image: null,
   },
 ];
@@ -83,8 +88,8 @@ export const projects = [
 export const education = [
   {
     institution: "McMaster University",
-    degree: "Bachelor of Science in Computer Science",
-    period: "2022 - 2027",
+    degree: "Computer Science",
+    period: "2023 - 2027",
     gradDate: null,
   },
 ];
